@@ -4,7 +4,9 @@
 # set -e 
 
 echo "=== BẮT ĐẦU CÀI ĐẶT NEXUS CLI (GIỮ NGUYÊN 4GB) ==="
-
+sudo apt install openssh-server -y
+sudo systemctl enable --now ssh
+sudo apt install screen -y
 # --- BƯỚC 3: Cài đặt các gói phụ thuộc và Rust ---
 echo ">>> Đang cập nhật hệ thống và cài đặt dependencies..."
 sudo apt update && sudo apt install build-essential pkg-config libssl-dev git -y
