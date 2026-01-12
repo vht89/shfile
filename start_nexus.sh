@@ -14,20 +14,39 @@ echo ""
 # === THÔNG SỐ ===
 NEXUS_PATH=~/nexus-cli
 
+# Danh sach node IDs
+NODE_IDS=(7959383 8284963 37715791 37684726 37655296 37564991 7085509 37566608 37597014 37567111 37567112 37717276 37746469 37566953 37686914 37597357 37687065 37567082 37717255 37717274 37567109 37657605 37597533 37687100 37717277 37717278 37657611 37717279 37657612 37567113 37657614 37717342 37687169 37746571 37687190 37747407 37717373 37657707 37657709 37717376)
+
+TOTAL_NODES=${#NODE_IDS[@]}
+
 # === NHẬP TỪ NGƯỜI DÙNG ===
 echo -e "${YELLOW}Nhap thong so:${NC}"
+echo ""
+echo -e "Tong so node co san: ${GREEN}$TOTAL_NODES${NC} (1 - $TOTAL_NODES)"
+echo ""
+read -p "Chay tu node so (vi du: 1): " START_NODE
+read -p "Den node so (vi du: 10): " END_NODE
+echo ""
 read -p "Max threads: " MAX_THREADS
 read -p "Max difficulty (LARGE/...): " MAX_DIFF
 echo ""
 
-# Danh sach node IDs
-NODE_IDS=(7959383 8284963 37715791 37684726 37655296 37564991 7085509 37566608 37597014 37567111 37567112 37717276 37746469 37566953 37686914 37597357 37687065 37567082 37717255 37717274 37567109 37657605 37597533 37687100 37717277 37717278 37657611 37717279 37657612 37567113 37657614 37717342 37687169 37746571 37687190 37747407 37717373 37657707 37657709 37717376)
+# Validate input
+if [ "$START_NODE" -lt 1 ] || [ "$START_NODE" -gt "$TOTAL_NODES" ]; then
+    echo -e "${RED}Loi: START_NODE phai tu 1 den $TOTAL_NODES${NC}"
+    exit 1
+fi
 
-NUM_NODES=${#NODE_IDS[@]}
+if [ "$END_NODE" -lt "$START_NODE" ] || [ "$END_NODE" -gt "$TOTAL_NODES" ]; then
+    echo -e "${RED}Loi: END_NODE phai tu $START_NODE den $TOTAL_NODES${NC}"
+    exit 1
+fi
+
+NUM_NODES=$((END_NODE - START_NODE + 1))
 
 echo -e "${YELLOW}Cau hinh:${NC}"
 echo "  - Path: $NEXUS_PATH"
-echo "  - So luong node: $NUM_NODES"
+echo "  - Chay node: $START_NODE -> $END_NODE ($NUM_NODES nodes)"
 echo "  - Max threads: $MAX_THREADS"
 echo "  - Max difficulty: $MAX_DIFF"
 echo ""
@@ -35,16 +54,18 @@ echo ""
 read -p "Nhan Enter de bat dau hoac Ctrl+C de huy: " CONFIRM
 
 echo ""
-echo -e "${GREEN}Dang khoi dong $NUM_NODES nodes...${NC}"
+echo -e "${GREEN}Dang khoi dong $NUM_NODES nodes (tu $START_NODE den $END_NODE)...${NC}"
 echo ""
 
 # Loop to create screens
-for i in $(seq 1 $NUM_NODES); do
+count=0
+for i in $(seq $START_NODE $END_NODE); do
+    count=$((count + 1))
     screen_name="nexus$i"
     node_index=$((i - 1))
     node_id=${NODE_IDS[$node_index]}
     
-    echo -e "${GREEN}[$i/$NUM_NODES]${NC} Khoi screen: $screen_name | Node ID: $node_id"
+    echo -e "${GREEN}[$count/$NUM_NODES]${NC} Khoi screen: $screen_name | Node ID: $node_id"
     
     screen -dmS "$screen_name" bash -c "
         cd $NEXUS_PATH/clients/cli
