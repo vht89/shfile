@@ -28,7 +28,7 @@ read -p "Chay tu node so (vi du: 1): " START_NODE
 read -p "Den node so (vi du: 10): " END_NODE
 echo ""
 read -p "Max threads: " MAX_THREADS
-read -p "Max difficulty (LARGE/...): " MAX_DIFF
+read -p "Max difficulty (LARGE/... - bo qua neu khong co): " MAX_DIFF
 echo ""
 
 # Validate input
@@ -48,7 +48,11 @@ echo -e "${YELLOW}Cau hinh:${NC}"
 echo "  - Path: $NEXUS_PATH"
 echo "  - Chay node: $START_NODE -> $END_NODE ($NUM_NODES nodes)"
 echo "  - Max threads: $MAX_THREADS"
-echo "  - Max difficulty: $MAX_DIFF"
+if [ -z "$MAX_DIFF" ]; then
+    echo "  - Max difficulty: (khong dat)"
+else
+    echo "  - Max difficulty: $MAX_DIFF"
+fi
 echo ""
 
 read -p "Nhan Enter de bat dau hoac Ctrl+C de huy: " CONFIRM
@@ -67,10 +71,14 @@ for i in $(seq $START_NODE $END_NODE); do
     
     echo -e "${GREEN}[$count/$NUM_NODES]${NC} Khoi screen: $screen_name | Node ID: $node_id"
     
-    screen -dmS "$screen_name" bash -c "
-        cd $NEXUS_PATH/clients/cli
-        ./target/release/nexus-network start --max-threads $MAX_THREADS --node-id $node_id --max-difficulty $MAX_DIFF
-        exec bash"
+    # Build command with optional max-difficulty
+    COMMAND="cd $NEXUS_PATH/clients/cli && ./target/release/nexus-network start --max-threads $MAX_THREADS --node-id $node_id"
+    
+    if [ -n "$MAX_DIFF" ]; then
+        COMMAND="$COMMAND --max-difficulty $MAX_DIFF"
+    fi
+    
+    screen -dmS "$screen_name" bash -c "$COMMAND; exec bash"
 done
 
 echo ""
