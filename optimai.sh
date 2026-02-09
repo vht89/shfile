@@ -11,8 +11,8 @@ if [ $# -lt 2 ]; then
 fi
 
 # Store email and password from arguments
-EMAIL=$1
-PASSWORD=$2
+EMAIL=vohuythu89@gmail.com
+PASSWORD=*e9qtzu3NXp9h.!
 
 echo "===== OptimAI CLI Node Installation Script ====="
 echo "This script will install Docker, set up OptimAI-CLI-Node, and configure auto-start."
