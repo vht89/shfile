@@ -1,4 +1,3 @@
-@@ -1,61 +1,59 @@
 #!/bin/bash
 
 # Dừng script nếu có lỗi nghiêm trọng (tùy chọn)
