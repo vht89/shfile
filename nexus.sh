@@ -1,162 +1,78 @@
 #!/bin/bash
+# PHIÊN BẢN SCRIPT TỐI GIẢN - CHỈ CÀI ĐẶT, KHÔNG CHẠY NODE
 
-#═══════════════════════════════════════════════════════════
-#  NEXUS CLI INSTALLER - INSTALL ONLY
-#═══════════════════════════════════════════════════════════
-
+# Dừng script ngay lập tức nếu có lệnh nào thất bại
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
+echo "======================================================"
+echo "  Bat dau Script Cai Dat Nexus CLI (Phien ban Toi gian) "
+echo "======================================================"
+echo ""
 
-# Paths
-INSTALL_DIR="$HOME/nexus-cli"
-CLI_DIR="$INSTALL_DIR/clients/cli"
-SETUP_FILE="$CLI_DIR/src/session/setup.rs"
+# BUOC 1: CAI DAT CAC GOI PHU THUOC
+echo "--> Buoc 1: Cai dat cac goi he thong..."
+sudo apt-get update
+sudo apt-get install -y openssh-server screen build-essential pkg-config libssl-dev git
+sudo systemctl enable --now ssh
+echo "Hoan tat Buoc 1."
+echo ""
 
-print_header() {
-    clear
-    echo -e "${BOLD}═══════════════════════════════════════════${NC}"
-    echo -e "${BOLD}  🔧 NEXUS CLI INSTALLER${NC}"
-    echo -e "${BOLD}═══════════════════════════════════════════${NC}"
-    echo ""
-}
-
-print_step() {
-    echo -e "${BLUE}▶${NC} ${BOLD}$1${NC}"
-}
-
-print_success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-#─────────────────────────────────────────────────────────────
-# STEP 1: Install Dependencies
-#─────────────────────────────────────────────────────────────
-install_deps() {
-    print_step "[1/5] Installing dependencies..."
-    
-    sudo apt update -qq
-    sudo apt install -y \
-        build-essential \
-        pkg-config \
-        libssl-dev \
-        git \
-        curl \
-        > /dev/null 2>&1
-    
-    print_success "Dependencies installed"
-}
-
-#─────────────────────────────────────────────────────────────
-# STEP 2: Install Rust
-#─────────────────────────────────────────────────────────────
-install_rust() {
-    print_step "[2/5] Installing Rust..."
-    
-    if command -v cargo &> /dev/null; then
-        print_success "Rust already installed"
-        source "$HOME/.cargo/env"
-        return
-    fi
-    
+# BUOC 2: CAI DAT RUST
+echo "--> Buoc 2: Cai dat Rust..."
+# Kiem tra xem Rust da co chua
+if ! command -v rustc &> /dev/null; then
+    # Neu chua co, tien hanh cai dat
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    # Them bien moi truong cua Cargo vao session hien tai
     source "$HOME/.cargo/env"
-    
-    print_success "Rust installed"
-}
+else
+    echo "Rust da duoc cai dat, bo qua buoc nay."
+fi
+echo "Hoan tat Buoc 2."
+echo ""
 
-#─────────────────────────────────────────────────────────────
-# STEP 3: Clone Repository
-#─────────────────────────────────────────────────────────────
-clone_repo() {
-    print_step "[3/5] Cloning repository..."
-    
-    cd "$HOME"
-    
-    if [ -d "$INSTALL_DIR" ]; then
-        echo -e "${YELLOW}Removing old directory...${NC}"
-        rm -rf "$INSTALL_DIR"
-    fi
-    
-    git clone https://github.com/nexus-xyz/nexus-cli "$INSTALL_DIR" > /dev/null 2>&1
-    
-    print_success "Repository cloned"
-}
+# BUOC 3: CLONE REPOSITORY
+echo "--> Buoc 3: Clone repository Nexus CLI..."
+cd ~
+# Xoa thu muc cu neu ton tai de dam bao clone moi
+if [ -d "nexus-cli" ]; then
+    echo "Tim thay thu muc 'nexus-cli' cu, se xoa va clone lai."
+    rm -rf nexus-cli
+fi
+git clone https://github.com/nexus-xyz/nexus-cli.git
+echo "Hoan tat Buoc 3."
+echo ""
 
-#─────────────────────────────────────────────────────────────
-# STEP 4: Modify Setup File
-#─────────────────────────────────────────────────────────────
-modify_setup() {
-    print_step "[4/5] Modifying setup.rs..."
-    
-    cd "$CLI_DIR"
-    
-    # Change 0.75 -> 1.0
-    sed -i 's/0\.75/1.0/g' "$SETUP_FILE"
-    
-    # Update num_workers line
-    sed -i '/let mut num_workers/c\    let mut num_workers: usize = max_threads.unwrap_or(1).clamp(1, max_workers as u32) as usize;' "$SETUP_FILE"
-    
-    # Add override logic
-    sed -i '/println!.*Warning/i\    if let Some(mt) = max_threads { num_workers = mt as usize; }\n' "$SETUP_FILE"
-    
-    print_success "Setup.rs modified"
-}
+# BUOC 4: CHINH SUA FILE SOURCE (KHONG BACKUP)
+echo "--> Buoc 4: Chinh sua file setup.rs..."
+SETUP_FILE="$HOME/nexus-cli/clients/cli/src/session/setup.rs"
 
-#─────────────────────────────────────────────────────────────
-# STEP 5: Build Project
-#─────────────────────────────────────────────────────────────
-build_project() {
-    print_step "[5/5] Building project (10-15 minutes)..."
-    
-    cd "$CLI_DIR"
-    
-    cargo build --release
-    
-    print_success "Build completed"
-}
+# Thay doi ti le su dung CPU tu 0.75 thanh 1.0
+sed -i '/let max_workers = (num_cpus::get() as f64 \* 0.75)/s/0\.75/1.0/' "$SETUP_FILE"
 
-#─────────────────────────────────────────────────────────────
-# Show Summary
-#─────────────────────────────────────────────────────────────
-show_summary() {
-    echo ""
-    echo -e "${BOLD}═══════════════════════════════════════════${NC}"
-    echo -e "${BOLD}  ✅ CÀI ĐẶT HOÀN TẤT!${NC}"
-    echo -e "${BOLD}═══════════════════════════════════════════${NC}"
-    echo ""
-    echo -e "${BOLD}📍 Location:${NC} $CLI_DIR"
-    echo ""
-    echo -e "${YELLOW}Muốn chạy node sau, dùng lệnh:${NC}"
-    echo -e "   ${GREEN}cd $CLI_DIR${NC}"
-    echo -e "   ${GREEN}./target/release/nexus-network start --max-threads 25${NC}"
-    echo ""
-}
+# Thay doi cach khai bao num_workers
+sed -i "/let mut num_workers =/c\\    let mut num_workers: usize = max_threads.unwrap_or(1).clamp(1, max_workers as u32) as usize;" "$SETUP_FILE"
 
-#─────────────────────────────────────────────────────────────
-# MAIN
-#─────────────────────────────────────────────────────────────
-main() {
-    print_header
-    
-    echo -e "${YELLOW}Cài đặt Nexus CLI (~15 phút)${NC}"
-    read -p "Tiếp tục? (y/n): " confirm
-    [[ ! "$confirm" =~ ^[Yy]$ ]] && exit 0
-    echo ""
-    
-    install_deps
-    install_rust
-    clone_repo
-    modify_setup
-    build_project
-    
-    show_summary
-}
+# Them dong logic de ghi de max_threads
+sed -i "/\/\/ Additional memory warning/i\\    if let Some(mt) = max_threads { num_workers = mt as usize; }" "$SETUP_FILE"
 
-main
+echo "Da chinh sua file. Khong co backup duoc tao."
+echo "Hoan tat Buoc 4."
+echo ""
+
+# BUOC 5: BUILD DU AN
+echo "--> Buoc 5: Build du an (co the mat vai phut)..."
+cd ~/nexus-cli/clients/cli
+cargo build --release
+echo "Hoan tat Buoc 5."
+echo ""
+
+# THONG BAO HOAN TAT
+echo "======================================================"
+echo "      🎉 CAI DAT VA BUILD HOAN TAT! 🎉"
+echo "======================================================"
+echo "File thuc thi cua ban da duoc build thanh cong va nam o:"
+echo "~/nexus-cli/clients/cli/target/release/nexus-network"
+echo ""
+echo "Ban co the chay node thu cong khi can."
+echo "======================================================"
