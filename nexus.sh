@@ -1,57 +1,180 @@
-#!/usr/bin/env bash
-# nexus.sh — Script tự động build & chạy Nexus node
-# Cập nhật: 16-Feb-2026
-set -euo pipefail
+#!/bin/bash
 
-# ================================
-#  CÀI ĐẶT BIẾN CỘNG ĐỒNG
-# ================================
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# ===================================
+# NEXUS NETWORK - AUTO SETUP & RUN
+# ===================================
 
-# Kiểm tra Cargo.toml
-[[ -f "Cargo.toml" ]] || {
-    echo -e "\e[31m❌ LỖI:\e[0m Không tìm thấy file Cargo.toml trong $(pwd)"
-    exit 1
+set -e  # Dừng nếu có lỗi
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configs
+NODE_ID="7959383"
+MAX_THREADS="12"
+DIFFICULTY="extra_large_5"
+NEXUS_HOME="$HOME/nexus-cli"
+CLI_PATH="$NEXUS_HOME/clients/cli"
+BINARY_PATH="$CLI_PATH/target/release/nexus-network"
+REPO_URL="https://github.com/nexus-xyz/nexus-cli.git"
+
+# ===================================
+# FUNCTIONS
+# ===================================
+
+log_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
-# ================================
-#  CÀI RUST NẾU CHƯA CÓ
-# ================================
-if ! command -v cargo &>/dev/null; then
-    echo -e "\e[33m⚙️  Rust chưa được cài đặt. Đang cài tự động...\e[0m"
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source "$HOME/.cargo/env"
-    echo -e "\e[32m✅ Rust đã được cài đặt!\e[0m"
-fi
-
-# ================================
-#  XÁC ĐỊNH TÊN BINARY TỪ Cargo.toml
-# ================================
-BINARY_NAME=$(grep '^name =' Cargo.toml | cut -d '"' -f 2)
-
-[[ -n "$BINARY_NAME" ]] || {
-    echo -e "\e[31m❌ LỖI:\e[0m Không thể đọc tên binary từ Cargo.toml!"
-    exit 1
+log_success() {
+    echo -e "${GREEN}✅ $1${NC}"
 }
 
-# ================================
-#  BUILD DỰ ÁN
-# ================================
-echo -e "\e[34m🔨 Đang build $BINARY_NAME (release mode)...\e[0m"
-cargo clean
-cargo build --release > /dev/null 2>&1
+log_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
 
-# Kiểm tra file binary đã build
-if [[ ! -f "target/release/$BINARY_NAME" ]]; then
-    echo -e "\e[31m❌ LỖI:\e[0m Build thất bại! Không tìm thấy: target/release/$BINARY_NAME"
-    exit 1
-fi
+log_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
 
-echo -e "\e[32m✅ Build thành công!\e[0m"
+# Kiểm tra và cài Git
+check_git() {
+    if ! command -v git &> /dev/null; then
+        log_warning "Git chưa được cài đặt!"
+        log_info "Đang cài Git..."
+        
+        if [ -f /etc/debian_version ]; then
+            sudo apt update && sudo apt install -y git
+        elif [ -f /etc/redhat-release ]; then
+            sudo yum install -y git
+        else
+            log_error "Không thể tự động cài Git. Vui lòng cài thủ công!"
+            exit 1
+        fi
+        
+        log_success "Đã cài Git: $(git --version)"
+    else
+        log_success "Git đã sẵn sàng: $(git --version)"
+    fi
+}
 
-# ================================
-#  CHẠY NODE
-# ================================
-echo -e "\e[35m🚀 Khởi động $BINARY_NAME với tham số: $*\e[0m"
-exec "./target/release/$BINARY_NAME" "$@"
+# Kiểm tra và clone repo
+check_repo() {
+    if [ ! -d "$NEXUS_HOME" ]; then
+        log_warning "Chưa có repo Nexus!"
+        log_info "Đang clone từ GitHub..."
+        
+        git clone "$REPO_URL" "$NEXUS_HOME"
+        
+        if [ -d "$NEXUS_HOME" ]; then
+            log_success "Clone repo thành công!"
+        else
+            log_error "Clone repo thất bại!"
+            exit 1
+        fi
+    else
+        log_success "Repo đã tồn tại"
+        
+        # Hỏi có muốn update không
+        read -p "$(echo -e ${YELLOW}Bạn có muốn cập nhật repo không? [y/N]: ${NC})" -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Đang cập nhật repo..."
+            cd "$NEXUS_HOME"
+            git pull
+            log_success "Cập nhật xong!"
+        fi
+    fi
+}
+
+# Kiểm tra và cài Rust
+check_rust() {
+    if ! command -v cargo &> /dev/null; then
+        log_warning "Cargo chưa được cài đặt!"
+        log_info "Đang cài Rust & Cargo..."
+        
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source "$HOME/.cargo/env"
+        
+        if command -v cargo &> /dev/null; then
+            log_success "Đã cài Rust thành công: $(cargo --version)"
+        else
+            log_error "Cài Rust thất bại!"
+            exit 1
+        fi
+    else
+        log_success "Rust đã sẵn sàng: $(cargo --version)"
+    fi
+}
+
+# Kiểm tra và build binary
+check_binary() {
+    if [ ! -f "$BINARY_PATH" ]; then
+        log_warning "Binary chưa được build!"
+        log_info "Đang build Nexus Network... (có thể mất 5-10 phút)"
+        
+        cd "$CLI_PATH"
+        cargo build --release
+        
+        if [ -f "$BINARY_PATH" ]; then
+            log_success "Build thành công!"
+        else
+            log_error "Build thất bại!"
+            exit 1
+        fi
+    else
+        log_success "Binary đã sẵn sàng"
+    fi
+}
+
+# Chạy node
+run_node() {
+    log_info "Đang khởi động Nexus Network..."
+    log_info "Node ID: $NODE_ID | Threads: $MAX_THREADS | Difficulty: $DIFFICULTY"
+    echo ""
+    
+    "$BINARY_PATH" start \
+        --max-threads "$MAX_THREADS" \
+        --node-id "$NODE_ID" \
+        --max-difficulty "$DIFFICULTY"
+}
+
+# ===================================
+# MAIN
+# ===================================
+
+main() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}   NEXUS NETWORK - AUTO LAUNCHER${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # 1. Kiểm tra Git
+    check_git
+    
+    # 2. Kiểm tra & Clone Repo
+    check_repo
+    
+    # 3. Kiểm tra Rust
+    check_rust
+    
+    # 4. Kiểm tra Binary
+    check_binary
+    
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}   BẮT ĐẦU CHẠY NODE${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # 5. Chạy Node
+    run_node
+}
+
+# Chạy main
+main
